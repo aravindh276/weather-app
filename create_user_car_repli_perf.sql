@@ -1,26 +1,20 @@
 -- =============================================================================
--- SQL Script: Create user CAR_REPLI_PERF
+-- SQL Script: Create user CAR_REPLI_PERF (SAP HANA)
 -- Description: Creates the CAR_REPLI_PERF database user with necessary privileges
 -- =============================================================================
 
--- Create the user with a default tablespace and temporary tablespace
-CREATE USER CAR_REPLI_PERF
-  IDENTIFIED BY CAR_REPLI_PERF
-  DEFAULT TABLESPACE USERS
-  TEMPORARY TABLESPACE TEMP
-  QUOTA UNLIMITED ON USERS;
+-- Create the user with password
+CREATE USER CAR_REPLI_PERF PASSWORD Car_Repli_Perf1;
 
--- Grant basic connection and session privileges
-GRANT CREATE SESSION TO CAR_REPLI_PERF;
-GRANT CONNECT TO CAR_REPLI_PERF;
+-- Disable password expiration (optional, remove if policy requires rotation)
+ALTER USER CAR_REPLI_PERF DISABLE PASSWORD LIFETIME;
 
--- Grant resource privileges for creating schema objects
-GRANT RESOURCE TO CAR_REPLI_PERF;
+-- Grant schema-level privileges
+GRANT CREATE ANY ON SCHEMA CAR_REPLI_PERF TO CAR_REPLI_PERF;
 
--- Grant privileges required for replication performance monitoring
-GRANT CREATE TABLE TO CAR_REPLI_PERF;
-GRANT CREATE VIEW TO CAR_REPLI_PERF;
-GRANT CREATE SEQUENCE TO CAR_REPLI_PERF;
-GRANT CREATE PROCEDURE TO CAR_REPLI_PERF;
-GRANT CREATE TRIGGER TO CAR_REPLI_PERF;
-GRANT CREATE SYNONYM TO CAR_REPLI_PERF;
+-- Grant catalog read access for replication performance monitoring
+GRANT CATALOG READ TO CAR_REPLI_PERF;
+GRANT MONITORING TO CAR_REPLI_PERF;
+
+-- Grant role for general development tasks
+GRANT CONTENT_ADMIN TO CAR_REPLI_PERF;
