@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP Transport Comparison - System Refresh Helper</title>
+    <link rel="stylesheet" href="sap-transport-compare.css">
+</head>
+<body>
+    <div class="container">
+        <h1>SAP System Refresh - Transport Comparison Tool</h1>
+        <p class="subtitle">Compare STMS_IMPORT transport histories from Production and Test systems to identify transports that need re-importing after a system refresh.</p>
+
+        <div class="instructions">
+            <h3>How to use</h3>
+            <ol>
+                <li>In SAP, go to transaction <strong>STMS_IMPORT</strong> for both Production and Test systems.</li>
+                <li>Display the import history (Extras &rarr; Import History or use the import history button).</li>
+                <li>Select all entries and export to a text/tab-delimited file, or copy-paste them below.</li>
+                <li>The tool expects each line to contain a <strong>transport number</strong> (e.g., <code>DEVK900123</code>) along with optional columns like return code, date, owner, and description.</li>
+                <li>Click <strong>Compare</strong> to generate the list of transports to re-import.</li>
+            </ol>
+        </div>
+
+        <div class="input-section">
+            <div class="input-group">
+                <h2>Production System Transport History</h2>
+                <p class="hint">Paste or upload the STMS_IMPORT export from the <strong>Production</strong> system.</p>
+                <textarea id="prodInput" rows="12" placeholder="Paste production transport history here...
+Example lines:
+DEVK900001  2024-01-15  RC=0  User1  Description of transport
+DEVK900002  2024-01-16  RC=0  User2  Another transport
+DEVK900003  2024-02-01  RC=0  User3  Transport of copies"></textarea>
+                <div class="file-upload">
+                    <label for="prodFile">Or upload a file:</label>
+                    <input type="file" id="prodFile" accept=".txt,.csv,.tsv,.xls,.xlsx">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <h2>Test System Transport History</h2>
+                <p class="hint">Paste or upload the STMS_IMPORT export from the <strong>Test</strong> system.</p>
+                <textarea id="testInput" rows="12" placeholder="Paste test system transport history here...
+Example lines:
+DEVK900001  2024-01-10  RC=0  User1  Description of transport
+DEVK900004  2024-01-18  RC=0  User4  Only in test system
+DEVK900005  2024-02-05  RC=0  User5  Transport of copies (main DEVK900001 is in prod)"></textarea>
+                <div class="file-upload">
+                    <label for="testFile">Or upload a file:</label>
+                    <input type="file" id="testFile" accept=".txt,.csv,.tsv,.xls,.xlsx">
+                </div>
+            </div>
+        </div>
+
+        <div class="options-section">
+            <h3>Options</h3>
+            <div class="option-row">
+                <label for="sysPrefix">Transport System ID Prefix (e.g., DEVK, ERPK, S4HK):</label>
+                <input type="text" id="sysPrefix" value="" placeholder="Auto-detect">
+            </div>
+            <div class="option-row">
+                <label>
+                    <input type="checkbox" id="includeRC4" checked>
+                    Include transports with Return Code 4 (warnings)
+                </label>
+            </div>
+            <div class="option-row">
+                <label>
+                    <input type="checkbox" id="includeRC8">
+                    Include transports with Return Code 8 (errors)
+                </label>
+            </div>
+        </div>
+
+        <div class="button-section">
+            <button id="compareBtn" onclick="compareTransports()">Compare &amp; Generate Re-Import List</button>
+            <button id="clearBtn" onclick="clearAll()">Clear All</button>
+        </div>
+
+        <div id="results" class="results-section" style="display:none;">
+            <h2>Results</h2>
+
+            <div class="summary" id="summary"></div>
+
+            <div class="result-tabs">
+                <button class="tab-btn active" onclick="showTab('reimport')">Transports to Re-Import</button>
+                <button class="tab-btn" onclick="showTab('copies-removed')">Copies Removed (Main in Prod)</button>
+                <button class="tab-btn" onclick="showTab('test-only')">All Test-Only Transports</button>
+                <button class="tab-btn" onclick="showTab('common')">Common (Both Systems)</button>
+            </div>
+
+            <div id="tab-reimport" class="tab-content active">
+                <h3>Transports to Re-Import After Refresh</h3>
+                <p class="tab-description">These transports exist only in the Test system and their main transports (for copies) are NOT in Production. These must be re-imported after the system refresh.</p>
+                <div class="table-actions">
+                    <button onclick="exportTable('reimport')">Export to CSV</button>
+                    <button onclick="copyTable('reimport')">Copy to Clipboard</button>
+                    <span id="reimport-count" class="count-badge"></span>
+                </div>
+                <div id="reimport-table"></div>
+            </div>
+
+            <div id="tab-copies-removed" class="tab-content">
+                <h3>Transport of Copies Removed (Main Transport in Production)</h3>
+                <p class="tab-description">These are transport of copies found only in the Test system, but their corresponding main/original transport has already been imported into Production. They do NOT need re-importing.</p>
+                <div class="table-actions">
+                    <button onclick="exportTable('copies-removed')">Export to CSV</button>
+                    <button onclick="copyTable('copies-removed')">Copy to Clipboard</button>
+                    <span id="copies-removed-count" class="count-badge"></span>
+                </div>
+                <div id="copies-removed-table"></div>
+            </div>
+
+            <div id="tab-test-only" class="tab-content">
+                <h3>All Test-Only Transports (Before Filtering)</h3>
+                <p class="tab-description">Complete list of transports found in the Test system but not in Production (before removing copies whose main is in Production).</p>
+                <div class="table-actions">
+                    <button onclick="exportTable('test-only')">Export to CSV</button>
+                    <button onclick="copyTable('test-only')">Copy to Clipboard</button>
+                    <span id="test-only-count" class="count-badge"></span>
+                </div>
+                <div id="test-only-table"></div>
+            </div>
+
+            <div id="tab-common" class="tab-content">
+                <h3>Common Transports (In Both Systems)</h3>
+                <p class="tab-description">Transports that exist in both Production and Test systems. These will be retained after the refresh.</p>
+                <div class="table-actions">
+                    <button onclick="exportTable('common')">Export to CSV</button>
+                    <button onclick="copyTable('common')">Copy to Clipboard</button>
+                    <span id="common-count" class="count-badge"></span>
+                </div>
+                <div id="common-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="sap-transport-compare.js"></script>
+</body>
+</html>
