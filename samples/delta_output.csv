@@ -1,0 +1,6 @@
+request,short_text,is_toc,main_transport,note
+DEVK935733,ToC from DEVK935391 : Send Basis Configuration for Prod,True,DEVK935391,ToC of DEVK935391 (main not in PE1)
+DEVK935500,FI - GL Account master data changes,False,,Direct transport (not in PE1)
+DEVK935501,MM - Purchase order enhancement,False,,Direct transport (not in PE1)
+DEVK935503,HR - Payroll schema updates,False,,Direct transport (not in PE1)
+DEVK935504,ToC from DEVK935490 : Basis RFC connection settings,True,DEVK935490,ToC of DEVK935490 (main not in PE1)

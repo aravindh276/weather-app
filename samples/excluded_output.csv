@@ -1,0 +1,6 @@
+request,short_text,reason
+DEVK934956,ToC from DEVK934954 : Send Basis Configuration for Prod-ISU,"ToC - main transport DEVK934954 is in Production (PE1), no reimport needed"
+DEVK935502,ToC from DEVK935499 : SD Pricing config for client 100,"ToC - main transport DEVK935499 is in Production (PE1), no reimport needed"
+DEVK935505,PP - Production order BAdI implementation,Already in Production (PE1) - will be in refreshed DB
+DEVK934900,WM - Warehouse management config,Already in Production (PE1) - will be in refreshed DB
+DEVK934901,ToC from DEVK934890 : QM Inspection lot config,"ToC - main transport DEVK934890 is in Production (PE1), no reimport needed"
