@@ -31,6 +31,7 @@ Logic:
 
 Output:
     - CSV file containing the delta transport reimport list
+    - HTML report (interactive, color-coded, shareable)
     - Summary report printed to console
 """
 
@@ -260,6 +261,328 @@ def print_summary(reimport_list, excluded_list, te1_count, pe1_count):
     print("=" * 70)
 
 
+def generate_html_report(reimport_list, excluded_list, te1_count, pe1_count,
+                         output_path):
+    """Generate an interactive HTML report of the delta transport analysis."""
+    toc_count = sum(1 for t in reimport_list if t.get("is_toc"))
+    direct_count = len(reimport_list) - toc_count
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Build reimport table rows
+    reimport_rows = ""
+    for i, t in enumerate(reimport_list, 1):
+        toc_badge = ('<span class="badge toc">ToC</span>' if t.get("is_toc")
+                     else '<span class="badge direct">Direct</span>')
+        main_ref = (f'<span class="mono">{t["main_transport"]}</span>'
+                    if t.get("main_transport") else "-")
+        reimport_rows += f"""
+        <tr>
+          <td>{i}</td>
+          <td class="mono">{t['request']}</td>
+          <td>{t['short_text']}</td>
+          <td>{toc_badge}</td>
+          <td>{main_ref}</td>
+          <td>{t.get('note', '')}</td>
+        </tr>"""
+
+    # Build excluded table rows
+    excluded_rows = ""
+    for i, t in enumerate(excluded_list, 1):
+        excluded_rows += f"""
+        <tr>
+          <td>{i}</td>
+          <td class="mono">{t['request']}</td>
+          <td>{t['short_text']}</td>
+          <td>{t['reason']}</td>
+        </tr>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAP Transport Delta Report</title>
+  <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      padding: 20px;
+    }}
+    .container {{ max-width: 1200px; margin: 0 auto; }}
+    header {{
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 30px 40px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }}
+    header h1 {{ font-size: 1.8em; margin-bottom: 4px; }}
+    header .subtitle {{ opacity: 0.8; font-size: 0.95em; }}
+    header .timestamp {{ opacity: 0.6; font-size: 0.85em; margin-top: 8px; }}
+
+    .stats-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }}
+    .stat-card {{
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border-left: 4px solid #0f3460;
+    }}
+    .stat-card.reimport {{ border-left-color: #e94560; }}
+    .stat-card.toc {{ border-left-color: #f5a623; }}
+    .stat-card.direct {{ border-left-color: #27ae60; }}
+    .stat-card.excluded {{ border-left-color: #95a5a6; }}
+    .stat-card .label {{ font-size: 0.85em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }}
+    .stat-card .value {{ font-size: 2em; font-weight: 700; margin-top: 4px; }}
+    .stat-card.reimport .value {{ color: #e94560; }}
+    .stat-card.toc .value {{ color: #f5a623; }}
+    .stat-card.direct .value {{ color: #27ae60; }}
+
+    .section {{
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }}
+    .section h2 {{
+      font-size: 1.2em;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #f0f2f5;
+    }}
+    .section h2.reimport {{ color: #e94560; }}
+    .section h2.excluded {{ color: #95a5a6; }}
+
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9em;
+    }}
+    thead th {{
+      background: #f8f9fa;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #e9ecef;
+      position: sticky;
+      top: 0;
+    }}
+    tbody tr {{ border-bottom: 1px solid #f0f2f5; }}
+    tbody tr:hover {{ background: #f8f9fb; }}
+    tbody td {{ padding: 10px 12px; vertical-align: top; }}
+
+    .mono {{ font-family: 'Courier New', Courier, monospace; font-weight: 600; }}
+    .badge {{
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      font-weight: 600;
+    }}
+    .badge.toc {{ background: #fff3e0; color: #e65100; }}
+    .badge.direct {{ background: #e8f5e9; color: #2e7d32; }}
+
+    .filter-bar {{
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }}
+    .filter-btn {{
+      padding: 6px 16px;
+      border: 2px solid #e0e0e0;
+      background: #fff;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: 500;
+      transition: all 0.2s;
+    }}
+    .filter-btn:hover {{ border-color: #0f3460; color: #0f3460; }}
+    .filter-btn.active {{ background: #0f3460; color: #fff; border-color: #0f3460; }}
+
+    .search-box {{
+      padding: 8px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.9em;
+      width: 280px;
+      outline: none;
+      transition: border-color 0.2s;
+    }}
+    .search-box:focus {{ border-color: #0f3460; }}
+
+    .landscape {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 0;
+      font-size: 0.95em;
+    }}
+    .sys-box {{
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      color: #fff;
+    }}
+    .sys-dev {{ background: #2196f3; }}
+    .sys-test {{ background: #ff9800; }}
+    .sys-prod {{ background: #4caf50; }}
+    .arrow {{ font-size: 1.4em; color: #999; }}
+
+    footer {{
+      text-align: center;
+      color: #999;
+      font-size: 0.8em;
+      padding: 20px;
+    }}
+
+    @media print {{
+      body {{ background: #fff; padding: 10px; }}
+      header {{ background: #1a1a2e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+      .filter-bar, .search-box {{ display: none; }}
+      .section {{ box-shadow: none; border: 1px solid #ddd; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SAP Transport Delta Report</h1>
+      <div class="subtitle">System Refresh: Production (PE1) &rarr; Test (TE1)</div>
+      <div class="landscape">
+        <span class="sys-box sys-dev">DEV (DE1)</span>
+        <span class="arrow">&rarr;</span>
+        <span class="sys-box sys-test">TEST (TE1)</span>
+        <span class="arrow">&rarr;</span>
+        <span class="sys-box sys-prod">PROD (PE1)</span>
+      </div>
+      <div class="timestamp">Generated: {timestamp}</div>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Test System (TE1)</div>
+        <div class="value">{te1_count}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Production (PE1)</div>
+        <div class="value">{pe1_count}</div>
+      </div>
+      <div class="stat-card reimport">
+        <div class="label">Delta Reimport</div>
+        <div class="value">{len(reimport_list)}</div>
+      </div>
+      <div class="stat-card toc">
+        <div class="label">ToC Transports</div>
+        <div class="value">{toc_count}</div>
+      </div>
+      <div class="stat-card direct">
+        <div class="label">Direct Transports</div>
+        <div class="value">{direct_count}</div>
+      </div>
+      <div class="stat-card excluded">
+        <div class="label">Excluded</div>
+        <div class="value">{len(excluded_list)}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="reimport">Transports to Reimport ({len(reimport_list)})</h2>
+      <div class="filter-bar">
+        <input type="text" class="search-box" id="searchReimport"
+               placeholder="Search transports..." oninput="filterTable('reimportTable', this.value, currentFilter)">
+        <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+        <button class="filter-btn" onclick="setFilter('toc', this)">ToC Only</button>
+        <button class="filter-btn" onclick="setFilter('direct', this)">Direct Only</button>
+      </div>
+      <table id="reimportTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Request</th>
+            <th>Short Text</th>
+            <th>Type</th>
+            <th>Main Transport</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>{reimport_rows}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2 class="excluded">Excluded Transports ({len(excluded_list)})</h2>
+      <input type="text" class="search-box" id="searchExcluded"
+             placeholder="Search excluded..." oninput="filterTable('excludedTable', this.value, 'all')"
+             style="margin-bottom:16px">
+      <table id="excludedTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Request</th>
+            <th>Short Text</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>{excluded_rows}
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      SAP Transport Delta List Generator &mdash; Auto-generated report
+    </footer>
+  </div>
+
+  <script>
+    let currentFilter = 'all';
+
+    function setFilter(type, btn) {{
+      currentFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const searchVal = document.getElementById('searchReimport').value;
+      filterTable('reimportTable', searchVal, type);
+    }}
+
+    function filterTable(tableId, search, typeFilter) {{
+      const table = document.getElementById(tableId);
+      const rows = table.querySelectorAll('tbody tr');
+      const term = search.toLowerCase();
+
+      rows.forEach(row => {{
+        const text = row.textContent.toLowerCase();
+        const matchesSearch = !term || text.includes(term);
+        let matchesType = true;
+
+        if (typeFilter === 'toc') {{
+          matchesType = row.querySelector('.badge.toc') !== null;
+        }} else if (typeFilter === 'direct') {{
+          matchesType = row.querySelector('.badge.direct') !== null;
+        }}
+
+        row.style.display = (matchesSearch && matchesType) ? '' : 'none';
+      }});
+    }}
+  </script>
+</body>
+</html>"""
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="SAP Transport Delta List Generator - Identifies transports "
@@ -296,6 +619,11 @@ CSV Format:
     parser.add_argument(
         "--excluded", default=None,
         help="Optional: Output CSV file for excluded transports with reasons"
+    )
+    parser.add_argument(
+        "--html", default=None,
+        help="Output HTML report file (interactive, color-coded, shareable). "
+             "Use --html auto to auto-name, or --html report.html for custom name"
     )
     parser.add_argument(
         "--quiet", "-q", action="store_true",
@@ -340,6 +668,18 @@ CSV Format:
         write_output_csv(args.excluded, excluded_list, excluded_fields)
         print(f"Excluded transports written to: {args.excluded}")
         print(f"  -> {len(excluded_list)} transports excluded")
+
+    # Generate HTML report
+    if args.html is not None:
+        html_path = (f"delta_report_{timestamp}.html"
+                     if args.html == "auto" else args.html)
+        generate_html_report(
+            reimport_list, excluded_list,
+            len(te1_transports), len(pe1_transports),
+            html_path
+        )
+        print(f"\nHTML report generated: {html_path}")
+        print(f"  -> Open in a browser to view the interactive report")
 
     return 0 if reimport_list is not None else 1
 
